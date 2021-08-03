@@ -60,22 +60,22 @@ namespace Segments
             //Если обе прямые наклонные
             if (!s1.IsVertical && !s2.IsVertical)
             {
-               IPoint.X = Math.Round((s2.b - s1.b) / (s1.k - s2.k), 2);
-               IPoint.Y = Math.Round((s1.k * s2.b - s2.k * s1.b) / (s1.k - s2.k), 2);
+               IPoint.X = (s2.b - s1.b) / (s1.k - s2.k);
+               IPoint.Y = (s1.k * s2.b - s2.k * s1.b) / (s1.k - s2.k);
             }
             else
             {
                 //Если первая прямая вертикальная
                 if(s1.IsVertical)
                 {
-                    IPoint.X = Math.Round(s1.SP.X, 2);
-                    IPoint.Y = Math.Round(s2.k * IPoint.X + s2.b, 2);
+                    IPoint.X = s1.SP.X;
+                    IPoint.Y = s2.k * IPoint.X + s2.b;
                 }
                 //Иначе, вторая прямая вертикальная
                 else
                 {                                        
                     IPoint.X = s2.SP.X;
-                    IPoint.Y = Math.Round(s1.k * IPoint.X + s1.b, 2);                    
+                    IPoint.Y = s1.k * IPoint.X + s1.b;                    
                 }
             }
 
@@ -111,13 +111,13 @@ namespace Segments
             {
                 //Генерация координат конечных точек отрезков в диапазоне [-1000; 1000]
                 r = rand.NextDouble() * 2001.0 - 1000.0;
-                P1.X = Math.Round(r, 2);                
+                P1.X = r;                
                 r = rand.NextDouble() * 2001.0 - 1000.0;
-                P1.Y = Math.Round(r, 2);               
+                P1.Y = r;               
                 r = rand.NextDouble() * 2001.0 - 1000.0;
-                P2.X = Math.Round(r, 2);               
+                P2.X = r;               
                 r = rand.NextDouble() * 2001.0 - 1000.0;
-                P2.Y = Math.Round(r, 2);
+                P2.Y = r;
 
                 var L = new ZedGraph.PointPairList();                
 
@@ -140,8 +140,7 @@ namespace Segments
             Writer.Dispose();
 
             Segment cur = new Segment(); //Текущий рассматриваемый отрезок
-            var ISegmentsList = new List<Segment>(); //Список отрезков, которые пересекаются с текущим
-            var IndsList = new List<int>(); //Список индексов отрезков в SList, которые пересекаются с текущим
+            var ISegmentsList = new List<List<Segment>>(); //Список отрезков, которые пересекаются с текущим            
             var IPointsList = new ZedGraph.PointPairList(); //Список точек пересечения для текущего отрезка
             var PossibleIPoint = new ZedGraph.PointPair(); //Возможная точка пересечения
             Writer = new StreamWriter(IntersectionsFilePath, false, Encoding.Default);           
@@ -152,16 +151,19 @@ namespace Segments
                 //Если текущий отрезок был уже разделен, то пропускаем его               
                 if (!SList[i].Divided)
                 {
+                    foreach (var item in ISegmentsList)
+                    {
+                        item.Clear();
+                    }
                     ISegmentsList.Clear();
-                    IPointsList.Clear();
-                    IndsList.Clear();
+                    IPointsList.Clear();                   
                     cur = SList[i];
                     //Проверяем все остальные неразделенные отрезки на возможность пересечения и, если пересечение возможно,
                     //вычисляем координаты точки пересечения
                     for (int j = 0; j < SList.Count; j++)
                     {
                         //Если отрезок не совпадает с текущим, не был уже разделен и пересечение возможно
-                        if (cur != SList[j] && !SList[j].Divided && CheckForPossibleIntersection(cur, SList[j]) != -1)
+                        if (cur != SList[j] && CheckForPossibleIntersection(cur, SList[j]) != -1)
                         {
                             //Отдельно рассмотрим случай совпадающих прямых
                             //Если отрезки имеют бесконечное число точек пересечения, то точкой пересечения
@@ -170,18 +172,40 @@ namespace Segments
                             {
                                 //Проверка на принадлежность хотя бы одной крайней точки первого отрезка второму
                                 if (CheckForAffiliation(cur.SP, SList[j])) //Для начальной точки
-                                {
-                                    ISegmentsList.Add(SList[j]);
-                                    IndsList.Add(j);
-                                    IPointsList.Add(cur.SP);
+                                {                                   
+                                    //Если точки нет в списке, то добавляем её и создаем новый подсписок пересекающихся отрезков
+                                    //для этой точки
+                                    if (!IPointsList.Contains(cur.SP))
+                                    {
+                                        IPointsList.Add(cur.SP);
+                                        ISegmentsList.Add(new List<Segment>());
+                                        ISegmentsList[ISegmentsList.Count - 1].Add(SList[j]);
+                                    }
+                                    //Если точка пересечения уже есть в списке, то добавляем только отрезок в список пересекающихся
+                                    //отрезков для соответствующей точки пересечения
+                                    else
+                                    {
+                                        ISegmentsList[IPointsList.IndexOf(cur.SP)].Add(SList[j]);
+                                    }
                                 }
                                 else
                                 {
                                     if (CheckForAffiliation(cur.FP, SList[j])) //Для конечной точки
                                     {
-                                        ISegmentsList.Add(SList[j]);
-                                        IndsList.Add(j);
-                                        IPointsList.Add(cur.FP);
+                                        //Если точки нет в списке, то добавляем её и создаем новый подсписок пересекающихся
+                                        //отрезков для этой точки
+                                        if (!IPointsList.Contains(cur.FP))
+                                        {
+                                            IPointsList.Add(cur.FP);
+                                            ISegmentsList.Add(new List<Segment>());
+                                            ISegmentsList[ISegmentsList.Count - 1].Add(SList[j]);
+                                        }
+                                        //Если точка пересечения уже есть в списке, то добавляем только отрезок в список
+                                        //пересекающихся отрезков для соответствующей точки пересечения
+                                        else
+                                        {
+                                            ISegmentsList[IPointsList.IndexOf(cur.FP)].Add(SList[j]);
+                                        }
                                     }
                                 }
                             }
@@ -193,132 +217,155 @@ namespace Segments
                                 //Проверка принадлежности точки пересечения обоим отрезкам
                                 if (CheckForAffiliation(PossibleIPoint, cur) && CheckForAffiliation(PossibleIPoint, SList[j]))
                                 {
-                                    ISegmentsList.Add(SList[j]); //Отрезок пересекается с текущим. Добавим его в список
-                                    IndsList.Add(j); //Добавим его индекс в список
-                                    IPointsList.Add(PossibleIPoint); //Добавим точку пересечения в список                                   
+                                    //Если точки нет в списке, то добавляем её и создаем новый подсписок пересекающихся
+                                    //отрезков для этой точки
+                                    if (!IPointsList.Contains(PossibleIPoint))
+                                    {
+                                        IPointsList.Add(PossibleIPoint); //Добавим точку пересечения в список
+                                        ISegmentsList.Add(new List<Segment>());
+                                        ISegmentsList[ISegmentsList.Count - 1].Add(SList[j]);
+                                    }
+                                    // Если точка пересечения уже есть в списке, то добавляем только отрезок в список
+                                    //пересекающихся отрезков для соответствующей точки пересечения
+                                    else
+                                    {
+                                        ISegmentsList[IPointsList.IndexOf(PossibleIPoint)].Add(SList[j]);
+                                    }                                                                      
                                 }
                             }
                         }
                     }
-                    //Если список отрезков пересекающихся с текущим не пуст, то ищем отрезок с наибольшим наклоном по модулю
-                    //и делим его на два отрезка с зазором в два единичных отрезка
-                    if (ISegmentsList.Count != 0)
-                    {
-                        double maxAbsK = Math.Abs(ISegmentsList[0].k);//Максимальное по модулю значение наклона к горизонтальной оси
-                        int Ind = 0; //Индекс отрезка в списке ISegmentsList, которому соответствует максимальный наклон
-                        ISegmentsList.Add(cur);
-                        IndsList.Add(i);
-                        IPointsList.Add(IPointsList[0]);
-
-                        //Поиск среди пересекающихся отрезков отрезка с максимальным наклоном
-                        for(int ind = 1; i < ISegmentsList.Count; i++)
+                    //Если список точек пересечения с текущим не пуст
+                    if (IPointsList.Count != 0)
+                    {                                              
+                        //Добавим текущий отрезок в каждый из списков отрезков для точек пересечения
+                        foreach (var item in ISegmentsList)
                         {
-                            if(Math.Abs(ISegmentsList[ind].k) > maxAbsK)
+                            item.Add(cur);
+                        }
+
+                        var curPoints = new ZedGraph.PointPairList(); //Список точек пересечения, для которых текущий отрезок 
+                                                                      //обладает наибольшим наклоном
+
+                        foreach (var item in ISegmentsList)
+                        {
+                            double maxAbsK = Math.Abs(item[0].k);//Максимальное значение наклона по модулю к горизонтальной оси
+                            Segment maxKSeg = item[0]; //Отрезок с наибольшим наклоном
+
+                            for(int INDEX = 1; INDEX < item.Count; INDEX++)
                             {
-                                maxAbsK = Math.Abs(ISegmentsList[ind].k);
-                                Ind = ind;
+                                if (Math.Abs(item[INDEX].k) > maxAbsK)
+                                {
+                                    maxAbsK = Math.Abs(item[INDEX].k);
+                                    maxKSeg = item[INDEX];
+                                }
+                            }
+
+                            //Если для текущей точки пересечения отрезок cur обладает максимальным по модулю наклоном
+                            if(maxKSeg == cur)
+                            {
+                                curPoints.Add(IPointsList[ISegmentsList.IndexOf(item)]);
                             }
                         }
 
-                        //Пометим выбранный отрезок как разделенный в списке SList
-                        //Для этого создадим его копию, изменим в ней флаг Divided удалим старый отрезок из списка и на его
-                        //место добавим копию 
-                        Segment Temp = new Segment(SList[IndsList[Ind]]); //Создаем копию
-                        SList.RemoveAt(IndsList[Ind]); //Удаляем старый отрезок из SList
-                        Temp.Divided = true; //Устанавливаем флаг Divided в значение true
-                        SList.Insert(IndsList[Ind], Temp); //Вставляем исправленый отрезок на старое место
-
-                        //Если точка пересечения не является крайней точкой отрезка
-                        if (!IPointsList[Ind].Equals(ISegmentsList[Ind].SP) && !IPointsList[Ind].Equals(ISegmentsList[Ind].FP))
-                        {                            
-                            //Создаем два новых смещенных отрезка, записываем их в файл Intersections.txt и отображаем на плоскости
-                            Segment S1 = new Segment(), S2 = new Segment();
-
-                            //Инициализация параметров
-                            S1.SP = ISegmentsList[Ind].SP.Clone();
-                            S1.FP = IPointsList[Ind].Clone();
-                            S1.k = ISegmentsList[Ind].k;
-                            S1.b = ISegmentsList[Ind].b;
-                            S1.IsVertical = ISegmentsList[Ind].IsVertical;
-                            S1.Divided = true;
-                            S2.SP = IPointsList[Ind].Clone();
-                            S2.FP = ISegmentsList[Ind].FP.Clone();
-                            S2.k = ISegmentsList[Ind].k;
-                            S2.b = ISegmentsList[Ind].b;
-                            S2.IsVertical = ISegmentsList[Ind].IsVertical;
-                            S2.Divided = true;
-
-                            //Если среди пересекающихся отрезков нет вертикальных, то отрезок S1 сдвигаем вниз на один единичный
-                            //отрезок, а S2 вверх
-                            if(!ISegmentsList.Exists(x => x.IsVertical == true))
-                            {
-                                S1.SP.Y -= 1.0;
-                                S1.FP.Y -= 1.0;
-                                S2.SP.Y += 1.0;
-                                S2.FP.Y += 1.0;
-                            }
-                            //Если вертикальный отрезок есть, то отрезок S1 сдвигаем влево на один единичный
-                            //отрезок, а S2 вправо
-                            else
-                            {
-                                S1.SP.X -= 1.0;
-                                S1.FP.X -= 1.0;
-                                S2.SP.X += 1.0;
-                                S2.FP.X += 1.0;
-                            }
-
-                            //Запись координат новых отрезков в файл Intersections.txt
-                            StrToWrite = string.Format("Seg1: SP:({0}; {1})  FP:({2}; {3})\tSeg2: SP:({4}; {5})  FP:({6}; {7})",
-                               S1.SP.X, S1.SP.Y, S1.FP.X, S1.FP.Y, S2.SP.X, S2.SP.Y, S2.FP.X, S2.FP.Y);
-                            Writer.WriteLine(StrToWrite);
-
-                            //Отображение отрезков на плоскости XY
-                            ZedGraph.PointPairList L = new ZedGraph.PointPairList();
-                            ZedGraph.PointPairList L2 = new ZedGraph.PointPairList();
-                            L.Add(S1.SP);
-                            L.Add(S1.FP);
-                            L2.Add(S2.SP);
-                            L2.Add(S2.FP);
-                            var seg = zedGraphControl1.GraphPane.AddCurve("", L, Color.Green, 
-                                ZedGraph.SymbolType.Circle);
-                            var seg2 = zedGraphControl1.GraphPane.AddCurve("", L2, Color.Green,
-                                ZedGraph.SymbolType.Circle);
-
-                            seg.Symbol.Fill.Color = Color.Green;
-                            seg.Symbol.Fill.Type = ZedGraph.FillType.Solid;
-                            seg2.Symbol.Fill.Color = Color.Green;
-                            seg2.Symbol.Fill.Type = ZedGraph.FillType.Solid;
-
-                        }
-                        //Если точка пересечения является крайней точкой отрезка, который нужно разделить, то сдвинем этот
-                        //отрезок целиком на два единичных отрезка вверх или вправо 
-                        else
+                        //Если текущий отрезок обладает наибольшим наклоном хотя бы для одной точки пересечения
+                        if (curPoints.Count != 0)
                         {
-                            if (!ISegmentsList.Exists(x => x.IsVertical == true))
+                            //Пометим текущий отрезок как разделенный
+                            Segment Temp = new Segment(cur); //Создаем копию
+                            SList.RemoveAt(i); //Удаляем старый отрезок из SList
+                            Temp.Divided = true; //Устанавливаем флаг Divided в значение true
+                            SList.Insert(i, Temp); //Вставляем исправленый отрезок на старое место                           
+
+                            //Если среди точек пересечения нет крайних точек отрезка                          
+                            if (curPoints.Contains(cur.SP) && curPoints.Contains(cur.FP))
                             {
-                                ISegmentsList[Ind].SP.Y += 2.0;
-                                ISegmentsList[Ind].FP.Y += 2.0;
+                                curPoints.Remove(cur.SP);
+                                curPoints.Remove(cur.FP);
                             }
                             else
                             {
-                                ISegmentsList[Ind].SP.X += 2.0;
-                                ISegmentsList[Ind].FP.X += 2.0;
+                                if (curPoints.Contains(cur.SP))
+                                {
+                                    curPoints.Remove(cur.SP);
+                                }
+                                else
+                                {
+                                    if (curPoints.Contains(cur.FP))
+                                    {
+                                        curPoints.Remove(cur.FP);
+                                    }
+                                }
                             }
 
-                            //Запись координат отрезка в файл Intersections.txt
-                            StrToWrite = string.Format("Seg: SP:({0}; {1})  FP:({2}; {3})", 
-                                ISegmentsList[Ind].SP.X, ISegmentsList[Ind].SP.Y, ISegmentsList[Ind].FP.X, ISegmentsList[Ind].FP.Y);
-                            Writer.WriteLine(StrToWrite);
+                            Segment[] Segs = new Segment[curPoints.Count + 1]; //Массив отрезков, на которые делится текущий
 
-                            //Отображение отрезка на плоскости XY
-                            var L = new ZedGraph.PointPairList();                          
-                            L.Add(ISegmentsList[Ind].SP);
-                            L.Add(ISegmentsList[Ind].FP);                            
-                            var seg = zedGraphControl1.GraphPane.AddCurve("", L, Color.Green,
-                                ZedGraph.SymbolType.Circle);
-                            seg.Symbol.Fill.Color = Color.Green;
-                            seg.Symbol.Fill.Type = ZedGraph.FillType.Solid;                            
-                        }                   
+                            curPoints.Sort(); //Отсортируем список точек
+                                              //Добавим начальную и конечную точки 
+                            curPoints.Insert(0, cur.SP);
+                            curPoints.Add(cur.FP);
+
+                            for (int INDEX = 0; INDEX < Segs.Length; INDEX++)
+                            {
+                                Segs[INDEX] = new Segment();
+                                //Инициализация параметров новых отрезков
+                                Segs[INDEX].SP = curPoints[INDEX].Clone();
+                                Segs[INDEX].FP = curPoints[INDEX + 1].Clone();
+                                Segs[INDEX].b = cur.b;
+                                Segs[INDEX].Divided = true;
+                                Segs[INDEX].IsVertical = cur.IsVertical;
+                                Segs[INDEX].k = cur.k;
+                            }
+
+                            for (int INDEX = 0; INDEX < Segs.Length; INDEX++)
+                            {
+                                //Каждый подотрезок смещаем вверх-вниз
+
+                                if (Segs[INDEX].k > 0)
+                                {
+                                    //Каждый четный вниз на 1, а нечетный вверх на 1
+                                    if (INDEX % 2 == 0)
+                                    {
+                                        Segs[INDEX].SP.Y -= 1.0;
+                                        Segs[INDEX].FP.Y -= 1.0;
+                                    }
+                                    else
+                                    {
+                                        Segs[INDEX].SP.Y += 1.0;
+                                        Segs[INDEX].FP.Y += 1.0;
+                                    }
+                                }
+                                else
+                                {
+                                    //Каждый четный вверх на 1, а нечетный вниз на 1
+                                    if (INDEX % 2 == 0)
+                                    {
+                                        Segs[INDEX].SP.Y += 1.0;
+                                        Segs[INDEX].FP.Y += 1.0;
+                                    }
+                                    else
+                                    {
+                                        Segs[INDEX].SP.Y -= 1.0;
+                                        Segs[INDEX].FP.Y -= 1.0;
+                                    }
+                                }
+
+                                //Запись координат в файл 
+                                StrToWrite += string.Format("Seg{0}: SP:({1}; {2})  FP:({3}; {4})\t", INDEX + 1,
+                                   Math.Round(Segs[INDEX].SP.X, 2), Math.Round(Segs[INDEX].SP.Y, 2),
+                                   Math.Round(Segs[INDEX].FP.X, 2), Math.Round(Segs[INDEX].FP.Y, 2));
+
+                                ZedGraph.PointPairList L = new ZedGraph.PointPairList();
+                                L.Add(Math.Round(Segs[INDEX].SP.X, 2), Math.Round(Segs[INDEX].SP.Y, 2));
+                                L.Add(Math.Round(Segs[INDEX].FP.X, 2), Math.Round(Segs[INDEX].FP.Y, 2));
+
+                                var seg = zedGraphControl1.GraphPane.AddCurve("", L, Color.Green,
+                            ZedGraph.SymbolType.Circle);
+                                seg.Symbol.Fill.Color = Color.Green;
+                                seg.Symbol.Fill.Type = ZedGraph.FillType.Solid;
+                            }
+                            Writer.WriteLine(StrToWrite);
+                        }                                                                                                                                                               
                     }                                                   
                 }
             }
